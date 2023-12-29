@@ -4,6 +4,7 @@ In such a case, you can set a policy to call the non-idempotent activity only on
 
 This demo demonstrates this *idempotency by validation* in the context of a ticket ordering system.
 
+## Simple Troublesome Process
 Here is a sample ticket order process:
 **Input:** order ID
 1. Get token for calling the ticket reservation system
@@ -13,17 +14,25 @@ Here is a sample ticket order process:
 
 **Output:** one and only one ticket created in database, return ticket number
 
+## Making The Process More Durable
 Step #4, *create ticket*, is *not* idempotent. It should only be called one time. However, we can create a step that *validates that a ticket exists*. Let's make a process like this: 
 
 1. Get token for calling the ticket reservation system
 2. Retrieve reservation by order
 3. Durably create tickets:
+    
     a. Retrieve payment info 
+
     b. Create ticket for reservation and payment info -- may fail and can only be called once
+
     c. Validate ticket for reservation
+
     d. Loop here until a ticket is created
 
+
 Step #3 is our *idempotency loop*. It could be a [child workflow](https://docs.temporal.io/workflows#child-workflow) and leverage Temporal's retryability, but I kept it as a loop for readability's sake.
+
+## Additional Cool Stuff
 
 This demo additionally demonstrates the [durability](https://temporal.io/how-it-works) of a process implemented in Temporal:
 1. Crashing the process doesn't kill it. Upon resume it picks up right where it left off.
