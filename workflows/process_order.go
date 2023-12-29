@@ -40,15 +40,14 @@ func ProcessOrder(ctx workflow.Context, order ticket.TicketOrder) (string, error
 
 	// idempotency loop: retry the create ticket execution at most once, validate it, and if it doesn't succeed, try to create ticket again
 
-
-	for ticketFound := false; !ticketFound;  {
+	for ticketFound := false; !ticketFound; {
 
 		// RetryPolicy specifies how to automatically handle retries if an Activity fails.
 		// we want to only run once
-		// "CREATE-TICKET-ERROR", "CREATE-TICKET-TIMEOUT"
+		// optionally you could non-retry all errors found: "CREATE-TICKET-ERROR", "CREATE-TICKET-TIMEOUT" with:
+		// NonRetryableErrorTypes: []string{"CREATE-TICKET-ERROR", "CREATE-TICKET-TIMEOUT"},
 		activityretrypolicy := &temporal.RetryPolicy{
 			MaximumAttempts:        1, // zero retries
-			NonRetryableErrorTypes: []string{"CREATE-TICKET-ERROR", "CREATE-TICKET-TIMEOUT"},
 		}
 
 		activityoptions := workflow.ActivityOptions{
@@ -64,25 +63,25 @@ func ProcessOrder(ctx workflow.Context, order ticket.TicketOrder) (string, error
 		if ticketCreateErr != nil {
 			logger.Error(u.ColorYellow, "CreateTicket activity failed... Or did it?", "Error", ticketCreateErr, u.ColorReset)
 
-			
 			delay := 15 // wait a bit for things to settle
 			logger.Debug(u.ColorYellow, "ProcessOrder: Sleeping between activity calls - to wait for the ticket system to settle", u.ColorReset)
 			logger.Info(u.ColorYellow, "ProcessOrder: workflow.Sleep duration", delay, "seconds", u.ColorReset)
 			workflow.Sleep(ctx, time.Duration(delay)*time.Second)
-		}		
+		}
 
 		logger.Debug(u.ColorYellow, "ProcessOrder: Restoring original Activity Options", u.ColorReset)
-		ctx = workflow.WithActivityOptions(ctx, originalActivityOptions)		
+		ctx = workflow.WithActivityOptions(ctx, originalActivityOptions)
 
 		logger.Info(u.ColorBlue, "ProcessOrder: Validating Ticket Exists for", order.OrderID, u.ColorReset)
-		err = workflow.ExecuteActivity(ctx, activities.ValidateTicket, order.OrderID, reservation, token).Get(ctx, &ticketFound)
+		err = workflow.ExecuteActivity(ctx, activities.ValidateTicket, order.OrderID, reservation, token).Get(ctx, &order.Ticket)
 		if err != nil {
 			logger.Error(u.ColorRed, "ValidateTicket activity failed.", "Error", err, u.ColorReset)
 			return "", err
 		}
 
-		if ticketFound {
-			logger.Info(u.ColorGreen, "ProcessOrder: Ticket Found for Order: ", order.OrderID, u.ColorReset)
+		if len(order.Ticket) > 0 {
+			ticketFound = true
+			logger.Info(u.ColorGreen, "ProcessOrder: Ticket Found for Order: ", order.OrderID, "-", order.Ticket, u.ColorReset)
 			break
 		}
 		logger.Info(u.ColorYellow, "ProcessOrder: Ticket Not Found for Order: ", order.OrderID, ", trying again.", u.ColorReset)

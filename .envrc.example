@@ -39,6 +39,5 @@ export DATACONVERTER_ENCRYPTION_KEY_ID=mysecretkey
 export LOG_LEVEL=debug
 
 # local JSON backend db connection
-export DATABASE=database/inventory.json
 export DATABASEPATH=database/
 

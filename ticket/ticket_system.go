@@ -9,14 +9,13 @@ import (
 	"io"
 	"math/rand"
 	"os"
-
 	//"github.com/google/uuid"
 )
 
 type ticket struct {
 	OrderID     string `json:"orderID"`
 	TicketID    string `json:"ticketID"`
-	PaymentInfo string `json:"inStock"`
+	PaymentInfo string `json:"paymentInfo"`
 }
 
 // ReadJSON reads a JSON file and returns the unmarshalled data as an Inventory struct.
@@ -49,7 +48,7 @@ func ReadJSON(filename string) (ticket, error) {
 // It returns an token and an error.
 func GetToken() (string, error) {
 	token := "12348972134-1234213"
-	// simulate a random error
+	// simulate a random token error
 	if utils.IsError() {
 		return "", errors.New("RANDOM ERROR RETRIEVING TOKEN: TOKEN SERVER FAILED")
 	}
@@ -63,7 +62,8 @@ func GetToken() (string, error) {
 func GetReservation(orderID string, token string) (string, error) {
 	//	reservation := "1123581321-ASDFQWERTY"
 	reservation := fmt.Sprintf("%d-%s", rand.Intn(999999), "ASDFQWERTY")
-	// simulate a random error
+	
+	// simulate a random reservation error
 	if utils.IsError() {
 		return "", errors.New("RANDOM ERROR RETRIEVING RESERVATION: RESERVATION SYSTEM FAILED")
 	}
@@ -77,40 +77,32 @@ func GetReservation(orderID string, token string) (string, error) {
 func CreateTicket(orderID string, reservation string, token string) (string, error) {
 
 	// get PCI payment info for orderID -- retryable
-
-	// call to issue tickets with PCI info -- non retryable
 	creditCardInfo, err := GetPCIInfo(reservation, token)
 	if err != nil {
 		return "", err
 	}
 
-	
-	/*
-		newticket := TicketOrder{
-			OrderID:     orderID,
-			Ticket:      "",
-			PaymentInfo: creditcardInfo,
-		}
-	*/
+	// create request to create ticket with payment info
 	ticketOrder := ticket{
 		OrderID:     orderID,
 		TicketID:    fmt.Sprintf("TICKET-%d", rand.Intn(99999)),
 		PaymentInfo: creditCardInfo,
 	}
 
-	//filename := fmt.Sprintf(ticketOrder.TicketID, orderID, "-", reservation, uuid.New().String())
-	filename := fmt.Sprintf("%sticket-%s-%s-Reserve-%s.json", os.Getenv("DATABASEPATH"), ticketOrder.TicketID, ticketOrder.OrderID, reservation)
+	// simulate a random error before creating a ticket
+	if utils.IsErrorPrettyLikely() {
+		return "", errors.New("CREATE-TICKET-ERROR")
+	}
+
+	filename := fmt.Sprintf("%s%s-reserve-%s.json", os.Getenv("DATABASEPATH"), orderID, reservation)
+	// call to issue tickets with PCI info -- non retryable
 	err = UpdateJSON(filename, ticketOrder)
 
 	if err != nil {
 		return "", err
 	}
 
-	// simulate a random error
-	if utils.IsErrorPrettyLikely() {
-		return "", errors.New("CREATE-TICKET-ERROR")
-	}
-
+	// simulate a random error  after creating a ticket
 	if utils.IsErrorPrettyLikely() {
 		return "", errors.New("CREATE-TICKET-TIMEOUT")
 	}
@@ -121,27 +113,26 @@ func CreateTicket(orderID string, reservation string, token string) (string, err
 // ValidateTicket creates a ticket and returns true if the ticket is found in  the ticketing system
 //
 // It returns a boolean indicator if the ticket exists or not and an error.
-func ValidateTicket(orderID string, reservation string, token string) (bool, error) {
+func ValidateTicket(orderID string, reservation string, token string) (string, error) {
 
-	filename := fmt.Sprintf("%sOrder-%s-Reserve-%s.json", os.Getenv("DATABASEPATH"), orderID, reservation)
-
+	filename := fmt.Sprintf("%s%s-reserve-%s.json", os.Getenv("DATABASEPATH"), orderID, reservation)
 
 	data, err := ReadJSON(filename)
 	if err != nil {
 		fmt.Println("Error reading JSON:", err)
-		return false, nil
+		return "", nil
 	}
 
 	// simulate a random error
 	if utils.IsError() {
-		return false, errors.New("RANDOM ERROR VALIDATING TICKET EXISTS")
+		return "", errors.New("RANDOM ERROR VALIDATING TICKET EXISTS")
 	}
 
 	if data.OrderID == orderID {
-		return true, nil
+		return data.TicketID, nil
 	}
-	return false, nil
-	
+	return "", nil
+
 }
 
 // GetPCIInfo creates a ticket and returns true if the ticket is found in  the ticketing system
