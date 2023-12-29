@@ -13,15 +13,16 @@ import (
  * Takes a context.Context, an order ID, a reservation, and a token as parameters
  * Returns an reservation and an error if something went bad.
  */
-func ValidateTicket(ctx context.Context, orderID string, reservation string, token string) (bool, error) {
+func ValidateTicket(ctx context.Context, orderID string, reservation string, token string) (string, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("ValidateTicket Activity started")
 
-	ticketExists, err := ticket.ValidateTicket(orderID, reservation, token)
+	ticket, err := ticket.ValidateTicket(orderID, reservation, token)
 	if err != nil {
-		return false, err
+		logger.Error("ValidateTicket Activity failed", err)
+		return "", err
 	}
 
 	logger.Info("ValidateTicket Activity completed successfully")
-	return ticketExists, nil
+	return ticket, nil
 }

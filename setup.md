@@ -1,9 +1,9 @@
 # Setup
-You need to have a Temporal server up and running. It currently uses temporal cloud but you can configure it to use local.
+You need to have a Temporal server up and running and Go installed. This currently uses temporal cloud but you can configure it to use local.
 
 CLone the repo :
 ```shell
-git clone https://github.com/joshmsmith/temporal-order-management.git
+git clone https://github.com/joshmsmith/temporal-idempotence-by-validation
 ```
 
 ## Temporal Cloud configuration
@@ -52,7 +52,6 @@ export DATACONVERTER_ENCRYPTION_KEY_ID=mysecretkey
 export LOG_LEVEL=debug
 
 # local JSON backend db connection
-export DATABASE=database/inventory.json
 export DATABASEPATH=database/
 
 

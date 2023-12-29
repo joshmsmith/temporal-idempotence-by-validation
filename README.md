@@ -1,17 +1,34 @@
-# Temporal Order Management Demo
-This is a simple demo in Go that implements an order management system  in [Temporal](https://temporal.io/).
+# Temporal Idempotence By Validation Demo
+This is a simple [Temporal](https://temporal.io/) demo in Go that demonstrates **idempotent by validation**. Sometimes with Temporal, you need to call a service that isn't [idempotent](https://en.wikipedia.org/wiki/Idempotence): calling it more than once with the same inputs is bad - may cause duplicate entries or other unintended behavior. 
+In such a case, you can set a policy to call the non-idempotent activity only once, and then **validate** that it was successful, and retry it if not. In this way, the *process* of creation-validation becomes idempotent; it won't run the non-idempotent activity again unless it is needed, and the process can be called as many times as needed until it succeeds.
 
-Here is our sample order process pseudocode:
+This demo demonstrates this *idempotency by validation* in the context of a ticket ordering system.
 
-![pitchcode](./resources/pitchcode.png)
+Here is a sample ticket order process:
+**Input:** order ID
+1. Get token for calling the ticket reservation system
+2. Retrieve reservation by order
+3. Retrieve payment info 
+4. Create ticket for reservation and payment info
 
+**Output:** one and only one ticket created in database, return ticket number
 
-This demo app demonstrates the [durability](https://temporal.io/how-it-works) of a process implemented in Temporal:
+Step #4, *create ticket*, is *not* idempotent. It should only be called one time. However, we can create a step that *validates that a ticket exists*. Let's make a process like this: 
+
+1. Get token for calling the ticket reservation system
+2. Retrieve reservation by order
+3. Durably create tickets:
+    a. Retrieve payment info 
+    b. Create ticket for reservation and payment info -- may fail and can only be called once
+    c. Validate ticket for reservation
+    d. Loop here until a ticket is created
+
+Step #3 is our *idempotency loop*. It could be a [child workflow](https://docs.temporal.io/workflows#child-workflow) and leverage Temporal's retryability, but I kept it as a loop for readability's sake.
+
+This demo additionally demonstrates the [durability](https://temporal.io/how-it-works) of a process implemented in Temporal:
 1. Crashing the process doesn't kill it. Upon resume it picks up right where it left off.
 2. Errors are recovered without thought or work
 3. At-Least-Once execution: activities succeed at least once per the workflow
-
-Optionally, it can demonstrate how to [manage idempotence](./idempotence.md) in Temporal.
 
 These capabilities are **great to develop with** and **change the way I think about doing development.** 
 
@@ -24,68 +41,25 @@ While working on this project, I created **many** bugs in my activities, and all
 *Zero workflow processes failed in the building of this demo*.
 
 
-
-## Process Order Concept
-When a customer orders a product, the order is managed by executing the below steps, managed by Temporal.
- 
-This project utilises a workflow named [**"Process Order"**](./workflows/process_order.go), and this workflow invokes four activities:
-
- 1. [Check for Fraud](./activities/check_fraud.go): validates that the payment info isn't fraudulent 
- 2. [Prepare Shipment](./activities/prepare_shipment.go): validate there's enough stock and that the order isn't a duplicate
- 3. [Charge](./activities/charge.go): charge for the order
- 4. [Ship](./activities/ship.go): ship the order
- 
- There is an extra step added to make sure there's enough inventory after the order:
-
- 5. [Supplier Order](./activities/supplier_order.go). If the stock for the product drops below the minimum (5,000), an [order is placed with the supplier](./inventory/inventory.go) and the stock is updated.
-
-These error-prone [Activities](https://docs.temporal.io/activities) are included in a [Workflow](https://docs.temporal.io/workflows) and executed in a [Worker](https://docs.temporal.io/workers), all built with the [Temporal SDK](https://docs.temporal.io/dev-guide):
-
-![how_does_it_work](./resources/workflows_activities_steps.png)
-
-The activities have random errors, just like real production applications. No matter the activity errors or worker crashes, Temporal ensures your application process completes as specified in the workflow. See the [demos](./demos.md) for ways to demonstrate and validate Temporal's retry capabilities and idempotency. 
-
-![durable_execution](./resources/temporal_app_and_temporal_service.png)
-
-
-
 ## Process Results
-The code in [starter](./starter/main.go) demonstrates the workflow. Initially, product 123456 has 1000 units. In the default behavior, a customer orders 999 units, and the supplier is requested to [deliver supply up to the minimum.](./inventory/inventory.go) After an order processes, you can see its results.
+The code in [starter](./starter/main.go) demonstrates the workflow. Initially, there are only a couple sample tickets in our "[database](./database/)". After ticket creation, you will see more created there.
 
-At the beginning, the database looks like this:
-
-```json
-{
-    "orderID": "000",
-    "productID": "123456",
-    "inStock": 1000
-}
-```
-
-As the order processes, the database looks like this:
-```json
-{
-    "orderID": "A123",
-    "productID": "123456",
-    "inStock": 1
-}
-```
-
-At the end the database looks like this:
+Here is a sample ticket:
 
 ```json
 {
-    "orderID": "A12",
-    "productID": "123456",
-    "inStock": 10000
+    "orderID": "order-112358",
+    "ticketID": "TICKET-42618",
+    "paymentInfo": "VISA-5197-988-3381-2526"
 }
 ```
-The inventory was reduced by the order quantity of 999 and then set back up to the requested capacity.
 
-No matter the activity errors, Temporal ensures that eventually this will be the state of things.
+The credit card number is random and not a valid credit card number. In addition, because the card info is handled all in one activity, it never reaches Temporal's servers, which you can verify by looking at the workflow JSON.
+
 
 # Getting Started
 See [Setup Instructions](./setup.md).
+
 ### First Demo
 After the setup is done, you can do the  basic demo described in the [setup instructions](./setup.md). 
 You can see an order get processed, maybe fail randomly.
